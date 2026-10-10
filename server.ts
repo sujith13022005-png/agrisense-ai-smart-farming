@@ -502,27 +502,50 @@ Reported Symptoms: ${Array.isArray(symptoms) ? symptoms.join(', ') : symptoms ||
 Field Operator Notes: ${notes || 'Visual lesion inspected'}
 `;
 
-        // Strip data:image/...;base64, prefix if present
-        let cleanBase64 = imageBase64;
+        // Process image: fetch and convert to base64 if HTTP URL, or strip data URI prefix
+        let cleanBase64 = '';
         let mimeType = 'image/jpeg';
-        if (imageBase64.includes(';base64,')) {
-          const parts = imageBase64.split(';base64,');
-          mimeType = parts[0].replace('data:', '');
-          cleanBase64 = parts[1];
+
+        if (typeof imageBase64 === 'string') {
+          if (imageBase64.startsWith('http://') || imageBase64.startsWith('https://')) {
+            try {
+              const imgRes = await fetch(imageBase64);
+              if (imgRes.ok) {
+                const buffer = await imgRes.arrayBuffer();
+                cleanBase64 = Buffer.from(buffer).toString('base64');
+                const contentType = imgRes.headers.get('content-type');
+                if (contentType && contentType.startsWith('image/')) {
+                  mimeType = contentType.split(';')[0];
+                }
+              }
+            } catch (fetchErr: any) {
+              console.warn('Could not fetch image URL for Gemini Vision:', fetchErr?.message);
+            }
+          } else if (imageBase64.includes(';base64,')) {
+            const parts = imageBase64.split(';base64,');
+            mimeType = parts[0].replace('data:', '') || 'image/jpeg';
+            cleanBase64 = parts[1];
+          } else {
+            cleanBase64 = imageBase64.trim();
+          }
         }
+
+        const parts: any[] = [];
+        // Only include inlineData if valid base64 is available and not a URL
+        if (cleanBase64 && !cleanBase64.startsWith('http://') && !cleanBase64.startsWith('https://')) {
+          parts.push({
+            inlineData: {
+              data: cleanBase64,
+              mimeType: mimeType || 'image/jpeg',
+            },
+          });
+        }
+        parts.push({ text: prompt });
 
         const response = await ai.models.generateContent({
           model: 'gemini-3.8-flash',
           contents: {
-            parts: [
-              {
-                inlineData: {
-                  data: cleanBase64,
-                  mimeType: mimeType || 'image/jpeg',
-                },
-              },
-              { text: prompt },
-            ],
+            parts,
           },
           config: {
             responseMimeType: 'application/json',
@@ -573,7 +596,7 @@ Field Operator Notes: ${notes || 'Visual lesion inspected'}
       userId: userId || 'farmer_rajesh_01',
       farmId,
       cropId,
-      imagePath: imageBase64.startsWith('data:image') ? imageBase64 : 'https://images.unsplash.com/photo-1592417817098-8f3d6910a552?w=600&auto=format&fit=crop&q=80',
+      imagePath: imageBase64 || 'https://images.unsplash.com/photo-1592417817098-8f3d6910a552?w=600&auto=format&fit=crop&q=80',
       cropName: analysisResult.cropName || targetCrop,
       growthStage,
       observedSymptoms: symptoms || [],
@@ -648,7 +671,7 @@ app.post('/api/irrigation/recommend', async (req: Request, res: Response) => {
         contents: prompt,
         config: { responseMimeType: 'application/json' },
       });
-      const parsed = safeJsonParse(response.text || '{}', null);
+      const parsed = safeJsonParse<any>(response.text || '{}', null);
       if (parsed) {
         recommendation = {
           crop,
@@ -698,7 +721,7 @@ app.post('/api/fertilizer/recommend', async (req: Request, res: Response) => {
         contents: prompt,
         config: { responseMimeType: 'application/json' },
       });
-      const parsed = safeJsonParse(response.text || '{}', null);
+      const parsed = safeJsonParse<any>(response.text || '{}', null);
       if (parsed) {
         recommendation = {
           crop,

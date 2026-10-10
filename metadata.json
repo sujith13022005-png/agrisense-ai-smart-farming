@@ -2,5 +2,7 @@
   "name": "AgriSense AI",
   "description": "AgriSense AI – Smart Farming Assistant. Instant crop disease diagnostics, precision irrigation schedules, and real-time agronomy guidance powered by Gemini AI.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
